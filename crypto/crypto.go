@@ -53,12 +53,6 @@ func Keccak512(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
-// CreateAddress creates an entropy address given the bytes and the nonce
-func CreateAddress(b common.Address, nonce uint64) common.Address {
-	data, _ := rlputil.EncodeToBytes([]interface{}{b, nonce})
-	return common.BytesToAddress(Keccak256(data)[12:])
-}
-
 // CreateAddress2 creates an ethereum address given the address bytes, initial
 // contract code and a salt.
 func CreateAddress2(b common.Address, salt [32]byte, code []byte) common.Address {
@@ -110,7 +104,7 @@ func FromECDSA(priv *ecdsa.PrivateKey) []byte {
 	if priv == nil {
 		return nil
 	}
-	return mathutil.PaddedBigBytes(priv.D, priv.Params().BitSize/8)
+	return common.PaddedBigBytes(priv.D, priv.Params().BitSize/8)
 }
 
 // UnmarshalPubkey converts bytes to a secp256k1 public key.

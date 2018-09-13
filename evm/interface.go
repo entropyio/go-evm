@@ -1,10 +1,8 @@
 package evm
 
 import (
+	"github.com/entropyio/go-evm/common"
 	"math/big"
-
-	"github.com/entropyio/go-entropy/blockchain/model"
-	"github.com/entropyio/go-entropy/common"
 )
 
 // StateDB is an EVM database for full state querying.
@@ -42,7 +40,7 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	Snapshot() int
 
-	AddLog(*model.Log)
+	//AddLog(*model.Log)
 	AddPreimage(common.Hash, []byte)
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
