@@ -3,7 +3,6 @@ package evm
 import (
 	"github.com/entropyio/go-evm/common"
 	"math/big"
-
 )
 
 // ContractRef is a reference to the contract's backing object

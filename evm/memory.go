@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/entropyio/go-evm/common"
 	"math/big"
-
 )
 
 // Memory implements a simple memory model for the entropy virtual machine.

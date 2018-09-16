@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"os"
 	"strings"
-
-
 )
 
 // Compiler contains information about the parsed source
@@ -184,7 +182,7 @@ func (c *Compiler) compileElement(element token) error {
 				value = []byte{0}
 			}
 		case stringValue:
-			value = []byte(rvalue.text[1 : len(rvalue.text)-1])
+			value = []byte(rvalue.text[1:len(rvalue.text)-1])
 		case label:
 			value = make([]byte, 4)
 			copy(value, big.NewInt(int64(c.labels[rvalue.text])).Bytes())

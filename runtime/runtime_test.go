@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"strings"
 	"testing"
-
 )
 
 func TestDefaults(t *testing.T) {

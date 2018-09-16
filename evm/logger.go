@@ -7,8 +7,6 @@ import (
 	"io"
 	"math/big"
 	"time"
-
-
 )
 
 // Storage represents a contract's storage.
@@ -55,7 +53,7 @@ type structLogMarshaling struct {
 	Stack       []*common.HexOrDecimal256
 	Gas         common.HexOrDecimal64
 	GasCost     common.HexOrDecimal64
-	Memory      common.Bytes
+	Memory      []byte
 	OpName      string `json:"opName"` // adds call to OpName() in MarshalJSON
 	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
 }
@@ -223,15 +221,15 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 }
 
 // WriteLogs writes evm logs in a readable format to the given writer
-func WriteLogs(writer io.Writer, logs []*model.Log) {
-	for _, log := range logs {
-		fmt.Fprintf(writer, "LOG%d: %x bn=%d txi=%x\n", len(log.Topics), log.Address, log.BlockNumber, log.TxIndex)
-
-		for i, topic := range log.Topics {
-			fmt.Fprintf(writer, "%08d  %x\n", i, topic)
-		}
-
-		fmt.Fprint(writer, hex.Dump(log.Data))
-		fmt.Fprintln(writer)
-	}
-}
+//func WriteLogs(writer io.Writer, logs []*model.Log) {
+//	for _, log := range logs {
+//		fmt.Fprintf(writer, "LOG%d: %x bn=%d txi=%x\n", len(log.Topics), log.Address, log.BlockNumber, log.TxIndex)
+//
+//		for i, topic := range log.Topics {
+//			fmt.Fprintf(writer, "%08d  %x\n", i, topic)
+//		}
+//
+//		fmt.Fprint(writer, hex.Dump(log.Data))
+//		fmt.Fprintln(writer)
+//	}
+//}

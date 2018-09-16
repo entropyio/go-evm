@@ -44,7 +44,7 @@ func Encrypt(random io.Reader, pub *PublicKey, msg []byte) (c1, c2 *big.Int, err
 	// EM = 0x02 || PS || 0x00 || M
 	em := make([]byte, pLen-1)
 	em[0] = 2
-	ps, mm := em[1:len(em)-len(msg)-1], em[len(em)-len(msg):]
+	ps, mm := em[1 : len(em)-len(msg)-1], em[len(em)-len(msg):]
 	err = nonZeroRandomBytes(ps, random)
 	if err != nil {
 		return

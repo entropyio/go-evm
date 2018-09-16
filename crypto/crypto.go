@@ -13,8 +13,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-
-
 )
 
 var (
@@ -51,6 +49,12 @@ func Keccak512(data ...[]byte) []byte {
 		d.Write(b)
 	}
 	return d.Sum(nil)
+}
+
+// CreateAddress creates an entropy address given the bytes and the nonce
+func CreateAddress(b common.Address, nonce uint64) common.Address {
+	data := common.Hex2Bytes(fmt.Sprintf("%x%x", b, nonce))
+	return common.BytesToAddress(Keccak256(data)[12:])
 }
 
 // CreateAddress2 creates an ethereum address given the address bytes, initial

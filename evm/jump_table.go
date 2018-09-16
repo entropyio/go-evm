@@ -7,10 +7,10 @@ import (
 )
 
 type (
-	executionFunc       func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
-	gasFunc             func(config.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	executionFunc func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
+	gasFunc func(config.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	stackValidationFunc func(*Stack) error
-	memorySizeFunc      func(*Stack) *big.Int
+	memorySizeFunc func(*Stack) *big.Int
 )
 
 var errGasUintOverflow = errors.New("gas uint64 overflow")

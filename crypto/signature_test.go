@@ -6,8 +6,6 @@ import (
 	"github.com/entropyio/go-evm/common"
 	"reflect"
 	"testing"
-
-
 )
 
 var (

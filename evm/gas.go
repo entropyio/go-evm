@@ -3,8 +3,6 @@ package evm
 import (
 	"github.com/entropyio/go-evm/config"
 	"math/big"
-
-
 )
 
 // Gas costs

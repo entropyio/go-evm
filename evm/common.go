@@ -3,7 +3,6 @@ package evm
 import (
 	"github.com/entropyio/go-evm/common"
 	"math/big"
-	
 )
 
 // calculates the memory size required for a step

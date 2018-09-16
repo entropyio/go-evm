@@ -8,7 +8,6 @@ import (
 	"github.com/entropyio/go-evm/crypto"
 
 	"math/big"
-
 )
 
 var (
@@ -655,9 +654,9 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		input        = memory.Get(offset.Int64(), size.Int64())
 		gas          = contract.Gas
 	)
-	if interpreter.evm.ChainConfig().IsHomestead(interpreter.evm.BlockNumber) {
-		gas -= gas / 64
-	}
+	//if interpreter.evm.ChainConfig().IsHomestead(interpreter.evm.BlockNumber) {
+	//	gas -= gas / 64
+	//}
 
 	contract.UseGas(gas)
 	res, addr, returnGas, suberr := interpreter.evm.Create(contract, input, gas, value)
@@ -665,7 +664,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.ChainConfig().IsHomestead(interpreter.evm.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
+	if suberr == ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
@@ -715,7 +714,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
-	toAddr := common.BigToAddress(addr)
+	//toAddr := common.BigToAddress(addr)
 	value = common.U256(value)
 	// Get the arguments from the memory.
 	args := memory.Get(inOffset.Int64(), inSize.Int64())
@@ -723,7 +722,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	if value.Sign() != 0 {
 		gas += config.CallStipend
 	}
-	ret, returnGas, err := interpreter.evm.Call(contract, toAddr, args, gas, value)
+	ret, err := interpreter.evm.Call(args, value)
 	if err != nil {
 		stack.push(interpreter.intPool.getZero())
 	} else {
@@ -732,7 +731,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	if err == nil || err == errExecutionReverted {
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	contract.Gas += returnGas
+	//contract.Gas += returnGas
 
 	interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
 	return ret, nil
@@ -856,15 +855,15 @@ func makeLog(size int) executionFunc {
 			topics[i] = common.BigToHash(stack.pop())
 		}
 
-		d := memory.Get(mStart.Int64(), mSize.Int64())
-		interpreter.evm.StateDB.AddLog(&model.Log{
-			Address: contract.Address(),
-			Topics:  topics,
-			Data:    d,
-			// This is a non-consensus field, but assigned here because
-			// core/state doesn't know the current block number.
-			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
-		})
+		//d := memory.Get(mStart.Int64(), mSize.Int64())
+		//interpreter.evm.StateDB.AddLog(&model.Log{
+		//	Address: contract.Address(),
+		//	Topics:  topics,
+		//	Data:    d,
+		//	// This is a non-consensus field, but assigned here because
+		//	// core/state doesn't know the current block number.
+		//	BlockNumber: interpreter.evm.BlockNumber.Uint64(),
+		//})
 
 		interpreter.intPool.put(mStart, mSize)
 		return nil, nil

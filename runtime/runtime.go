@@ -7,14 +7,12 @@ import (
 	"math"
 	"math/big"
 	"time"
-
-
 )
 
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
-	ChainConfig *config.ChainConfig
+	//ChainConfig *config.ChainConfig
 	Difficulty  *big.Int
 	Origin      common.Address
 	Coinbase    common.Address
@@ -26,19 +24,15 @@ type Config struct {
 	Debug       bool
 	EVMConfig   evm.Config
 
-	State     *state.StateDB
+	//State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
+
+	// add code here
+	ContractCode []byte
 }
 
 // sets defaults on the config
 func setDefaults(cfg *Config) {
-	if cfg.ChainConfig == nil {
-		cfg.ChainConfig = &config.ChainConfig{
-			ChainID:        big.NewInt(1),
-			HomesteadBlock: new(big.Int),
-		}
-	}
-
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
@@ -69,33 +63,27 @@ func setDefaults(cfg *Config) {
 //
 // Executes sets up a in memory, temporarily, environment for the execution of
 // the given code. It makes sure that it's restored to it's original state afterwards.
-func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
+func Execute(code, input []byte, cfg *Config) ([]byte, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
 	setDefaults(cfg)
 
-	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(database.NewMemDatabase()))
-	}
 	var (
-		address = common.BytesToAddress([]byte("contract"))
-		vmenv   = NewEnv(cfg)
-		sender  = evm.AccountRef(cfg.Origin)
+		//address = common.BytesToAddress([]byte("contract"))
+		vmenv = NewEnv(cfg)
+		//sender  = evm.AccountRef(cfg.Origin)
 	)
-	cfg.State.CreateAccount(address)
+	//cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(address, code)
+	//cfg.State.SetCode(address, code)
 	// Call the code with the given configuration.
-	ret, _, err := vmenv.Call(
-		sender,
-		common.BytesToAddress([]byte("contract")),
+	ret, err := vmenv.Call(
 		input,
-		cfg.GasLimit,
 		cfg.Value,
 	)
 
-	return ret, cfg.State, err
+	return ret, err
 }
 
 // Create executes the code using the EVM create method
@@ -104,10 +92,10 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		cfg = new(Config)
 	}
 	setDefaults(cfg)
-
-	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(database.NewMemDatabase()))
-	}
+	//
+	//if cfg.State == nil {
+	//	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(database.NewMemDatabase()))
+	//}
 	var (
 		vmenv  = NewEnv(cfg)
 		sender = evm.AccountRef(cfg.Origin)
@@ -128,20 +116,17 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg)
 
-	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
+	//sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	// Call the code with the given configuration.
-	ret, leftOverGas, err := vmenv.Call(
-		sender,
-		address,
+	ret, err := vmenv.Call(
 		input,
-		cfg.GasLimit,
 		cfg.Value,
 	)
 
-	return ret, leftOverGas, err
+	return ret, err
 }

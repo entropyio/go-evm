@@ -71,8 +71,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	}
 
 	return &EVMInterpreter{
-		evm:      evm,
-		cfg:      cfg,
+		evm: evm,
+		cfg: cfg,
 	}
 }
 
@@ -191,9 +191,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte) (ret []byte, err
 		// consume the gas and return an error if not enough gas is available.
 		// cost is explicitly set so that the capture state defer method can get the proper cost
 		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
-		if err != nil || !contract.UseGas(cost) {
-			return nil, ErrOutOfGas
-		}
+		//if err != nil || !contract.UseGas(cost) {
+		//	return nil, ErrOutOfGas
+		//}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
@@ -203,6 +203,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte) (ret []byte, err
 			logged = true
 		}
 
+		vmLog.Warningf("OPCode=%s, stack=%x", opCodeToString[op], stack.data)
 		// execute the operation
 		res, err := operation.execute(&pc, in, contract, mem, stack)
 		// verifyPool is a build flag. Pool verification makes sure the integrity

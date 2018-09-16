@@ -107,7 +107,6 @@ func TestEncode(t *testing.T) {
 	}
 }
 
-
 func TestEncodeUint64(t *testing.T) {
 	for _, test := range encodeUint64Tests {
 		enc := EncodeUint64(test.input.(uint64))
@@ -116,4 +115,3 @@ func TestEncodeUint64(t *testing.T) {
 		}
 	}
 }
-
