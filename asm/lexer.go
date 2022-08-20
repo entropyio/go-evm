@@ -44,18 +44,18 @@ const (
 
 // String implements stringer
 func (it tokenType) String() string {
-	if int(it) > len(stringtokenTypes) {
+	if int(it) > len(stringTokenTypes) {
 		return "invalid"
 	}
-	return stringtokenTypes[it]
+	return stringTokenTypes[it]
 }
 
-var stringtokenTypes = []string{
+var stringTokenTypes = []string{
 	eof:              "EOF",
+	lineStart:        "new line",
+	lineEnd:          "end of line",
 	invalidStatement: "invalid statement",
 	element:          "element",
-	lineEnd:          "end of line",
-	lineStart:        "new line",
 	label:            "label",
 	labelDef:         "label definition",
 	number:           "number",
@@ -77,9 +77,9 @@ type lexer struct {
 	debug bool // flag for triggering debug output
 }
 
-// lex lexes the program by name with the given source. It returns a
+// Lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
-func Lex(name string, source []byte, debug bool) <-chan token {
+func Lex(source []byte, debug bool) <-chan token {
 	ch := make(chan token)
 	l := &lexer{
 		input:  string(source),
@@ -169,7 +169,7 @@ func (l *lexer) emit(t tokenType) {
 	token := token{t, l.lineno, l.blob()}
 
 	if l.debug {
-		fmt.Fprintf(os.Stderr, "%04d: (%-20v) %s\n", token.lineno, token.typ, token.text)
+		_, _ = fmt.Fprintf(os.Stderr, "%04d: (%-20v) %s\n", token.lineno, token.typ, token.text)
 	}
 
 	l.tokens <- token
@@ -218,7 +218,7 @@ func lexComment(l *lexer) stateFn {
 // the lex text state function to advance the parsing
 // process.
 func lexLabel(l *lexer) stateFn {
-	l.acceptRun(Alpha + "_")
+	l.acceptRun(Alpha + "_" + Numbers)
 
 	l.emit(label)
 
@@ -238,7 +238,7 @@ func lexInsideString(l *lexer) stateFn {
 
 func lexNumber(l *lexer) stateFn {
 	acceptance := Numbers
-	if l.accept("0") || l.accept("xX") {
+	if l.accept("xX") {
 		acceptance = HexadecimalNumbers
 	}
 	l.acceptRun(acceptance)

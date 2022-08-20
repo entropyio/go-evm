@@ -1,62 +1,388 @@
 package config
 
-var (
-	TargetGasLimit = GenesisGasLimit // The artificial target
+import (
+	"encoding/binary"
+	"fmt"
+	"github.com/entropyio/go-evm/common"
+	"golang.org/x/crypto/sha3"
+	"math/big"
 )
 
 const (
-	GasLimitBoundDivisor uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
-	MinGasLimit          uint64 = 5000    // Minimum the gas limit may ever be.
-	GenesisGasLimit      uint64 = 4712388 // Gas limit of the Genesis block.
-
-	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
-	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
-	SloadGas              uint64 = 50    // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
-	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
-	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
-	TxGas                 uint64 = 21000 // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
-	TxGasContractCreation uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
-	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
-	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
-	SstoreSetGas          uint64 = 20000 // Once per SLOAD operation.
-	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
-	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
-
-	Sha3Gas          uint64 = 30    // Once per SHA3 operation.
-	Sha3WordGas      uint64 = 6     // Once per word of the SHA3 operation's data.
-	SstoreResetGas   uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
-	SstoreClearGas   uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
-	SstoreRefundGas  uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
-	JumpdestGas      uint64 = 1     // Refunded gas, once per SSTORE operation if the zeroness changes to zero.
-	EpochDuration    uint64 = 30000 // Duration between proof-of-work epochs.
-	CallGas          uint64 = 40    // Once per CALL operation & message call transaction.
-	CreateDataGas    uint64 = 200   //
-	CallCreateDepth  uint64 = 1024  // Maximum depth of call/create stack.
-	ExpGas           uint64 = 10    // Once per EXP instruction
-	LogGas           uint64 = 375   // Per LOG* operation.
-	CopyGas          uint64 = 3     //
-	StackLimit       uint64 = 1024  // Maximum size of VM stack allowed.
-	LogTopicGas      uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
-	CreateGas        uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
-	Create2Gas       uint64 = 32000 // Once per CREATE2 operation
-	SuicideRefundGas uint64 = 24000 // Refunded following a suicide operation.
-	MemoryGas        uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
-	TxDataNonZeroGas uint64 = 68    // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
-
-	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
-
-	// Precompiled contract gas prices
-
-	EcrecoverGas            uint64 = 3000   // Elliptic curve sender recovery gas price
-	Sha256BaseGas           uint64 = 60     // Base price for a SHA256 operation
-	Sha256PerWordGas        uint64 = 12     // Per-word price for a SHA256 operation
-	Ripemd160BaseGas        uint64 = 600    // Base price for a RIPEMD160 operation
-	Ripemd160PerWordGas     uint64 = 120    // Per-word price for a RIPEMD160 operation
-	IdentityBaseGas         uint64 = 15     // Base price for a data copy operation
-	IdentityPerWordGas      uint64 = 3      // Per-work price for a data copy operation
-	ModExpQuadCoeffDiv      uint64 = 20     // Divisor for the quadratic particle of the big int modular exponentiation
-	Bn256AddGas             uint64 = 500    // Gas needed for an elliptic curve addition
-	Bn256ScalarMulGas       uint64 = 40000  // Gas needed for an elliptic curve scalar multiplication
-	Bn256PairingBaseGas     uint64 = 100000 // Base price for an elliptic curve pairing check
-	Bn256PairingPerPointGas uint64 = 80000  // Per-point price for an elliptic curve pairing check
+	ConsensusTypeEthash = 1
+	ConsensusTypeClique = 2
+	ConsensusTypeClaude = 3
 )
+
+var (
+	// EthashChainConfig is the chain parameters to run a node on the main network.
+	EthashChainConfig = &ChainConfig{
+		ChainID:        big.NewInt(ConsensusTypeEthash),
+		HomesteadBlock: big.NewInt(1_150_000),
+		EIP150Block:    big.NewInt(2_463_000),
+		LondonBlock:    big.NewInt(12_965_000),
+		Ethash:         new(EthashConfig),
+		Clique:         nil,
+		//Claude:              new(ClaudeConfig),
+		//ConsensusType:       ConsensusTypeEthash,
+	}
+
+	// CliqueChainConfig contains the chain parameters to run a node on the pos network.
+	CliqueChainConfig = &ChainConfig{
+		ChainID:        big.NewInt(ConsensusTypeClique),
+		HomesteadBlock: big.NewInt(1_150_000),
+		EIP150Block:    big.NewInt(2_463_000),
+		LondonBlock:    big.NewInt(12_965_000),
+		Ethash:         nil,
+		Clique:         &CliqueConfig{Period: 15, Epoch: 30000},
+		//Claude:              new(ClaudeConfig),
+		//ConsensusType:       ConsensusTypeClique,
+	}
+
+	// ClaudeChainConfig contains the chain parameters to run a node on the dpos network.
+	ClaudeChainConfig = &ChainConfig{
+		ChainID:        big.NewInt(ConsensusTypeClaude),
+		HomesteadBlock: big.NewInt(1_150_000),
+		EIP150Block:    big.NewInt(2_463_000),
+		LondonBlock:    big.NewInt(12_965_000),
+		Ethash:         nil,
+		Clique:         nil,
+		//Claude:              new(ClaudeConfig),
+		//ConsensusType:       ConsensusTypeClaude,
+	}
+)
+
+var (
+	MainnetChainConfig = EthashChainConfig
+	TestChainConfig    = EthashChainConfig
+)
+
+// NetworkNames are user friendly names to use in the chain spec banner.
+var NetworkNames = map[string]string{
+	MainnetChainConfig.ChainID.String(): "mainNet",
+	CliqueChainConfig.ChainID.String():  "cliqueNet",
+	ClaudeChainConfig.ChainID.String():  "claudeNet",
+}
+
+// TrustedCheckpoint represents a set of post-processed trie roots (CHT and
+// BloomTrie) associated with the appropriate section index and head hash. It is
+// used to start light syncing from this checkpoint and avoid downloading the
+// entire header chain while still being able to securely access old headers/logs.
+type TrustedCheckpoint struct {
+	SectionIndex uint64      `json:"sectionIndex"`
+	SectionHead  common.Hash `json:"sectionHead"`
+	CHTRoot      common.Hash `json:"chtRoot"`
+	BloomRoot    common.Hash `json:"bloomRoot"`
+}
+
+// HashEqual returns an indicator comparing the itself hash with given one.
+func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
+	if c.Empty() {
+		return hash == common.Hash{}
+	}
+	return c.Hash() == hash
+}
+
+// Hash returns the hash of checkpoint's four key fields(index, sectionHead, chtRoot and bloomTrieRoot).
+func (c *TrustedCheckpoint) Hash() common.Hash {
+	var sectionIndex [8]byte
+	binary.BigEndian.PutUint64(sectionIndex[:], c.SectionIndex)
+
+	w := sha3.NewLegacyKeccak256()
+	w.Write(sectionIndex[:])
+	w.Write(c.SectionHead[:])
+	w.Write(c.CHTRoot[:])
+	w.Write(c.BloomRoot[:])
+
+	var h common.Hash
+	w.Sum(h[:0])
+	return h
+}
+
+// Empty returns an indicator whether the checkpoint is regarded as empty.
+func (c *TrustedCheckpoint) Empty() bool {
+	return c.SectionHead == (common.Hash{}) || c.CHTRoot == (common.Hash{}) || c.BloomRoot == (common.Hash{})
+}
+
+// CheckpointOracleConfig represents a set of checkpoint contract(which acts as an oracle)
+// config which used for light client checkpoint syncing.
+type CheckpointOracleConfig struct {
+	Address   common.Address   `json:"address"`
+	Signers   []common.Address `json:"signers"`
+	Threshold uint64           `json:"threshold"`
+}
+
+// ChainConfig is the core config which determines the blockchain settings.
+//
+// ChainConfig is stored in the database on a per block basis. This means
+// that any network, identified by its genesis block, can have its own
+// set of configuration options.
+type ChainConfig struct {
+	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
+
+	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	EIP150Block    *big.Int `json:"eip150Block,omitempty"`    // EIP150 HF block (nil = no fork)
+	LondonBlock    *big.Int `json:"londonBlock,omitempty"`    // London switch block (nil = no fork, 0 = already on london)
+
+	// TerminalTotalDifficulty is the amount of total difficulty reached by
+	// the network that triggers the consensus upgrade.
+	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
+
+	// Various consensus engines
+	Ethash *EthashConfig `json:"ethash,omitempty"`
+	Clique *CliqueConfig `json:"clique,omitempty"`
+	//Claude        *ClaudeConfig `json:"claude,omitempty"`
+	//ConsensusType int           `json:"consensusType,omitempty"`
+}
+
+// EthashConfig is the consensus engine configs for proof-of-work based sealing.
+type EthashConfig struct{}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *EthashConfig) String() string {
+	return "ethash"
+}
+
+// CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
+type CliqueConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *CliqueConfig) String() string {
+	return "clique"
+}
+
+//--- add dpos start ---//
+// ClaudeConfig is the consensus engine configs for delegated proof-of-stake based sealing.
+type ClaudeConfig struct {
+	Validators []common.Address `json:"validators"` // Genesis validator list
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (cc *ClaudeConfig) String() string {
+	return "claude"
+}
+
+//--- add dpos end ---//
+
+// String implements the fmt.Stringer interface.
+// String implements the fmt.Stringer interface.
+func (cc *ChainConfig) String() string {
+	var banner string
+
+	// Create some basinc network config output
+	network := NetworkNames[cc.ChainID.String()]
+	if network == "" {
+		network = "unknown"
+	}
+	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", cc.ChainID, network)
+	switch {
+	case cc.Ethash != nil:
+		if cc.TerminalTotalDifficulty == nil {
+			banner += "Consensus: Ethash (proof-of-work)\n"
+		} else {
+			banner += "Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)\n"
+		}
+	case cc.Clique != nil:
+		if cc.TerminalTotalDifficulty == nil {
+			banner += "Consensus: Clique (proof-of-authority)\n"
+		} else {
+			banner += "Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n"
+		}
+	default:
+		banner += "Consensus: unknown\n"
+	}
+	banner += "\n"
+
+	// Create a list of forks with a short description of them. Forks that only
+	// makes sense for mainnet should be optional at printing to avoid bloating
+	// the output for testnets and private networks.
+	banner += "Pre-Merge hard forks:\n"
+	banner += fmt.Sprintf(" - Homestead:                   %-8v (https://github.com/entropy/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md)\n", cc.HomesteadBlock)
+	banner += fmt.Sprintf(" - Tangerine Whistle (EIP 150): %-8v (https://github.com/entropy/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md)\n", cc.EIP150Block)
+	banner += fmt.Sprintf(" - London:                      %-8v (https://github.com/entropy/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md)\n", cc.LondonBlock)
+	banner += "\n"
+
+	// Add a special section for the merge as it's non-obvious
+	if cc.TerminalTotalDifficulty == nil {
+		banner += "Merge not configured!\n"
+		banner += " - Hard-fork specification: https://github.com/entropy/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)"
+	} else {
+		banner += "Merge configured:\n"
+		banner += " - Hard-fork specification:   https://github.com/entropy/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)\n"
+		banner += fmt.Sprintf(" - Total terminal difficulty: %v\n", cc.TerminalTotalDifficulty)
+	}
+	return banner
+}
+
+// IsHomestead returns whether num is either equal to the homestead block or greater.
+func (cc *ChainConfig) IsHomestead(num *big.Int) bool {
+	return isForked(cc.HomesteadBlock, num)
+}
+
+// IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
+func (cc *ChainConfig) IsEIP150(num *big.Int) bool {
+	return isForked(cc.EIP150Block, num)
+}
+
+// IsLondon returns whether num is either equal to the London fork block or greater.
+func (cc *ChainConfig) IsLondon(num *big.Int) bool {
+	return isForked(cc.LondonBlock, num)
+}
+
+// IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
+func (cc *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *big.Int) bool {
+	if cc.TerminalTotalDifficulty == nil {
+		return false
+	}
+	return parentTotalDiff.Cmp(cc.TerminalTotalDifficulty) < 0 && totalDiff.Cmp(cc.TerminalTotalDifficulty) >= 0
+}
+
+// CheckCompatible checks whether scheduled fork transitions have been imported
+// with a mismatching chain configuration.
+func (cc *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *CompatError {
+	bhead := new(big.Int).SetUint64(height)
+
+	// Iterate checkCompatible to find the lowest conflict.
+	var lasterr *CompatError
+	for {
+		err := cc.checkCompatible(newcfg, bhead)
+		if err == nil || (lasterr != nil && err.RewindTo == lasterr.RewindTo) {
+			break
+		}
+		lasterr = err
+		bhead.SetUint64(err.RewindTo)
+	}
+	return lasterr
+}
+
+// CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
+// to guarantee that forks can be implemented in a different order than on official networks
+func (cc *ChainConfig) CheckConfigForkOrder() error {
+	type fork struct {
+		name     string
+		block    *big.Int
+		optional bool // if true, the fork may be nil and next fork is still allowed
+	}
+	var lastFork fork
+	for _, cur := range []fork{
+		{name: "homesteadBlock", block: cc.HomesteadBlock},
+		{name: "eip150Block", block: cc.EIP150Block},
+		{name: "londonBlock", block: cc.LondonBlock},
+	} {
+		if lastFork.name != "" {
+			// Next one must be higher number
+			if lastFork.block == nil && cur.block != nil {
+				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
+					lastFork.name, cur.name, cur.block)
+			}
+			if lastFork.block != nil && cur.block != nil {
+				if lastFork.block.Cmp(cur.block) > 0 {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
+						lastFork.name, lastFork.block, cur.name, cur.block)
+				}
+			}
+		}
+		// If it was optional and not set, then ignore it
+		if !cur.optional || cur.block != nil {
+			lastFork = cur
+		}
+	}
+	return nil
+}
+
+func (cc *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *CompatError {
+	if isForkIncompatible(cc.HomesteadBlock, newcfg.HomesteadBlock, head) {
+		return newCompatError("Homestead fork block", cc.HomesteadBlock, newcfg.HomesteadBlock)
+	}
+	if isForkIncompatible(cc.EIP150Block, newcfg.EIP150Block, head) {
+		return newCompatError("EIP150 fork block", cc.EIP150Block, newcfg.EIP150Block)
+	}
+	if isForkIncompatible(cc.LondonBlock, newcfg.LondonBlock, head) {
+		return newCompatError("London fork block", cc.LondonBlock, newcfg.LondonBlock)
+	}
+	return nil
+}
+
+// isForkIncompatible returns true if a fork scheduled at s1 cannot be rescheduled to
+// block s2 because head is already past the fork.
+func isForkIncompatible(s1, s2, head *big.Int) bool {
+	return (isForked(s1, head) || isForked(s2, head)) && !configNumEqual(s1, s2)
+}
+
+// isForked returns whether a fork scheduled at block s is active at the given head block.
+func isForked(s, head *big.Int) bool {
+	if s == nil || head == nil {
+		return false
+	}
+	return s.Cmp(head) <= 0
+}
+
+func configNumEqual(x, y *big.Int) bool {
+	if x == nil {
+		return y == nil
+	}
+	if y == nil {
+		return false
+	}
+	return x.Cmp(y) == 0
+}
+
+// ConfigCompatError is raised if the locally-stored blockchain is initialised with a
+// ChainConfig that would alter the past.
+type CompatError struct {
+	What string
+	// block numbers of the stored and new configurations
+	StoredConfig, NewConfig *big.Int
+	// the block number to which the local chain must be rewound to correct the error
+	RewindTo uint64
+}
+
+func newCompatError(what string, storedBlock, newBlock *big.Int) *CompatError {
+	var rew *big.Int
+	switch {
+	case storedBlock == nil:
+		rew = newBlock
+	case newBlock == nil || storedBlock.Cmp(newBlock) < 0:
+		rew = storedBlock
+	default:
+		rew = newBlock
+	}
+	err := &CompatError{what, storedBlock, newBlock, 0}
+	if rew != nil && rew.Sign() > 0 {
+		err.RewindTo = rew.Uint64() - 1
+	}
+	return err
+}
+
+func (err *CompatError) Error() string {
+	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
+}
+
+// Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
+// that do not have or require information about the block.
+//
+// Rules is a one time interface meaning that it shouldn't be used in between transition
+// phases.
+type Rules struct {
+	ChainID                         *big.Int
+	IsHomestead, IsEIP150, IsLondon bool
+	IsMerge                         bool
+}
+
+// Rules ensures c's ChainID is not nil.
+func (cc *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
+	chainID := cc.ChainID
+	if chainID == nil {
+		chainID = new(big.Int)
+	}
+	return Rules{
+		ChainID:     new(big.Int).Set(chainID),
+		IsHomestead: cc.IsHomestead(num),
+		IsEIP150:    cc.IsEIP150(num),
+		IsLondon:    cc.IsLondon(num),
+		IsMerge:     isMerge,
+	}
+}

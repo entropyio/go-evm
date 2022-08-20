@@ -1,26 +1,16 @@
 package common
 
-import "encoding/hex"
-
-// ToHex returns the hex representation of b, prefixed with '0x'.
-// For empty slices, the return value is "0x0".
-//
-// Deprecated: use hexutil.Encode instead.
-func ToHex(b []byte) string {
-	hex := Bytes2Hex(b)
-	if len(hex) == 0 {
-		hex = "0"
-	}
-	return "0x" + hex
-}
+import (
+	"encoding/hex"
+	"errors"
+	"github.com/entropyio/go-evm/common/hexutil"
+)
 
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" || s[0:2] == "0X" {
-			s = s[2:]
-		}
+	if has0xPrefix(s) {
+		s = s[2:]
 	}
 	if len(s)%2 == 1 {
 		s = "0" + s
@@ -39,8 +29,8 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
-// hasHexPrefix validates str begins with '0x' or '0X'.
-func hasHexPrefix(str string) bool {
+// has0xPrefix validates str begins with '0x' or '0X'.
+func has0xPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
@@ -73,18 +63,27 @@ func Hex2Bytes(str string) []byte {
 	return h
 }
 
-// Hex2BytesFixed returns bytes of a specified fixed length flen.
-func Hex2BytesFixed(str string, flen int) []byte {
+// Hex2BytesFixed returns bytes of a specified fixed length fLen.
+func Hex2BytesFixed(str string, fLen int) []byte {
 	h, _ := hex.DecodeString(str)
-	if len(h) == flen {
+	if len(h) == fLen {
 		return h
 	}
-	if len(h) > flen {
-		return h[len(h)-flen:]
+	if len(h) > fLen {
+		return h[len(h)-fLen:]
 	}
-	hh := make([]byte, flen)
-	copy(hh[flen-len(h):flen], h[:])
+	hh := make([]byte, fLen)
+	copy(hh[fLen-len(h):fLen], h)
 	return hh
+}
+
+// ParseHexOrString tries to hexDecode b, but if the prefix is missing, it instead just returns the raw bytes
+func ParseHexOrString(str string) ([]byte, error) {
+	b, err := hexutil.Decode(str)
+	if errors.Is(err, hexutil.ErrMissingPrefix) {
+		return []byte(str), nil
+	}
+	return b, err
 }
 
 // RightPadBytes zero-pads slice to the right up to length l.
@@ -109,4 +108,26 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	copy(padded[l-len(slice):], slice)
 
 	return padded
+}
+
+// TrimLeftZeroes returns a subSlice of s without leading zeroes
+func TrimLeftZeroes(s []byte) []byte {
+	idx := 0
+	for ; idx < len(s); idx++ {
+		if s[idx] != 0 {
+			break
+		}
+	}
+	return s[idx:]
+}
+
+// TrimRightZeroes returns a subSlice of s without trailing zeroes
+func TrimRightZeroes(s []byte) []byte {
+	idx := len(s)
+	for ; idx > 0; idx-- {
+		if s[idx-1] != 0 {
+			break
+		}
+	}
+	return s[:idx]
 }

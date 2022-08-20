@@ -2,7 +2,7 @@ package asm
 
 import (
 	"fmt"
-	"github.com/entropyio/go-evm/common"
+	"github.com/entropyio/go-evm/common/mathutil"
 	"github.com/entropyio/go-evm/evm"
 	"math/big"
 	"os"
@@ -22,7 +22,7 @@ type Compiler struct {
 	debug bool
 }
 
-// newCompiler returns a new allocated compiler.
+// NewCompiler returns a new allocated compiler.
 func NewCompiler(debug bool) *Compiler {
 	return &Compiler{
 		labels: make(map[string]int),
@@ -40,10 +40,11 @@ func NewCompiler(debug bool) *Compiler {
 // second stage to push labels and determine the right
 // position.
 func (c *Compiler) Feed(ch <-chan token) {
+	var prev token
 	for i := range ch {
 		switch i.typ {
 		case number:
-			num := common.MustParseBig256(i.text).Bytes()
+			num := mathutil.MustParseBig256(i.text).Bytes()
 			if len(num) == 0 {
 				num = []byte{0}
 			}
@@ -56,13 +57,17 @@ func (c *Compiler) Feed(ch <-chan token) {
 			c.labels[i.text] = c.pc
 			c.pc++
 		case label:
-			c.pc += 5
+			c.pc += 4
+			if prev.typ == element && isJump(prev.text) {
+				c.pc++
+			}
 		}
 
 		c.tokens = append(c.tokens, i)
+		prev = i
 	}
 	if c.debug {
-		fmt.Fprintln(os.Stderr, "found", len(c.labels), "labels")
+		_, _ = fmt.Fprintln(os.Stderr, "found", len(c.labels), "labels")
 	}
 }
 
@@ -83,16 +88,16 @@ func (c *Compiler) Compile() (string, []error) {
 	}
 
 	// turn the binary to hex
-	var bin string
+	var bin strings.Builder
 	for _, v := range c.binary {
 		switch v := v.(type) {
 		case evm.OpCode:
-			bin += fmt.Sprintf("%x", []byte{byte(v)})
+			bin.WriteString(fmt.Sprintf("%x", []byte{byte(v)}))
 		case []byte:
-			bin += fmt.Sprintf("%x", v)
+			bin.WriteString(fmt.Sprintf("%x", v))
 		}
 	}
-	return bin, errors
+	return bin.String(), errors
 }
 
 // next returns the next token and increments the
@@ -136,7 +141,7 @@ func (c *Compiler) compileLine() error {
 
 // compileNumber compiles the number to bytes
 func (c *Compiler) compileNumber(element token) (int, error) {
-	num := common.MustParseBig256(element.text).Bytes()
+	num := mathutil.MustParseBig256(element.text).Bytes()
 	if len(num) == 0 {
 		num = []byte{0}
 	}
@@ -155,7 +160,7 @@ func (c *Compiler) compileElement(element token) error {
 		switch rvalue.typ {
 		case number:
 			// TODO figure out how to return the error properly
-			c.compileNumber(rvalue)
+			_, _ = c.compileNumber(rvalue)
 		case stringValue:
 			// strings are quoted, remove them.
 			c.pushBin(rvalue.text[1 : len(rvalue.text)-2])
@@ -164,6 +169,8 @@ func (c *Compiler) compileElement(element token) error {
 			pos := big.NewInt(int64(c.labels[rvalue.text])).Bytes()
 			pos = append(make([]byte, 4-len(pos)), pos...)
 			c.pushBin(pos)
+		case lineEnd:
+			c.pos--
 		default:
 			return compileErr(rvalue, rvalue.text, "number, string or label")
 		}
@@ -177,15 +184,15 @@ func (c *Compiler) compileElement(element token) error {
 		rvalue := c.next()
 		switch rvalue.typ {
 		case number:
-			value = common.MustParseBig256(rvalue.text).Bytes()
+			value = mathutil.MustParseBig256(rvalue.text).Bytes()
 			if len(value) == 0 {
 				value = []byte{0}
 			}
 		case stringValue:
-			value = []byte(rvalue.text[1:len(rvalue.text)-1])
+			value = []byte(rvalue.text[1 : len(rvalue.text)-1])
 		case label:
-			value = make([]byte, 4)
-			copy(value, big.NewInt(int64(c.labels[rvalue.text])).Bytes())
+			value = big.NewInt(int64(c.labels[rvalue.text])).Bytes()
+			value = append(make([]byte, 4-len(value)), value...)
 		default:
 			return compileErr(rvalue, rvalue.text, "number, string or label")
 		}
@@ -219,12 +226,12 @@ func (c *Compiler) pushBin(v interface{}) {
 // isPush returns whether the string op is either any of
 // push(N).
 func isPush(op string) bool {
-	return strings.ToUpper(op) == "PUSH"
+	return strings.EqualFold(op, "PUSH")
 }
 
 // isJump returns whether the string op is jump(i)
 func isJump(op string) bool {
-	return strings.ToUpper(op) == "JUMPI" || strings.ToUpper(op) == "JUMP"
+	return strings.EqualFold(op, "JUMPI") || strings.EqualFold(op, "JUMP")
 }
 
 // toBinary converts text to a vm.OpCode

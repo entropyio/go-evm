@@ -2,17 +2,21 @@ package runtime
 
 import (
 	"github.com/entropyio/go-evm/common"
-	"github.com/entropyio/go-evm/crypto"
+	"github.com/entropyio/go-evm/common/crypto"
+	"github.com/entropyio/go-evm/config"
 	"github.com/entropyio/go-evm/evm"
+	"github.com/entropyio/go-evm/logger"
 	"math"
 	"math/big"
 	"time"
 )
 
+var log = logger.NewLogger("[runtime]")
+
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
-	//ChainConfig *config.ChainConfig
+	ChainConfig *config.ChainConfig
 	Difficulty  *big.Int
 	Origin      common.Address
 	Coinbase    common.Address
@@ -22,17 +26,25 @@ type Config struct {
 	GasPrice    *big.Int
 	Value       *big.Int
 	Debug       bool
-	EVMConfig   evm.Config
+	EVMConfig   evm.EVMConfig
+	BaseFee     *big.Int
 
-	//State     *state.StateDB
+	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
-
-	// add code here
-	ContractCode []byte
 }
 
 // sets defaults on the config
 func setDefaults(cfg *Config) {
+	//if cfg.ChainConfig == nil {
+	//	cfg.ChainConfig = &config.ChainConfig{
+	//		ChainID:        big.NewInt(1),
+	//		HomesteadBlock: new(big.Int),
+	//		EIP150Block:    new(big.Int),
+	//		EIP155Block:    new(big.Int),
+	//		EIP158Block:    new(big.Int),
+	//	}
+	//}
+
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
@@ -56,30 +68,44 @@ func setDefaults(cfg *Config) {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}
+	if cfg.BaseFee == nil {
+		cfg.BaseFee = big.NewInt(config.InitialBaseFee)
+	}
 }
 
 // Execute executes the code using the input as call data during the execution.
 // It returns the EVM's return value, the new state and an error if it failed.
 //
-// Executes sets up a in memory, temporarily, environment for the execution of
-// the given code. It makes sure that it's restored to it's original state afterwards.
+// Execute sets up an in-memory, temporary, environment for the execution of
+// the given code. It makes sure that it's restored to its original state afterwards.
 func Execute(code, input []byte, cfg *Config) ([]byte, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
 	setDefaults(cfg)
 
+	//if cfg.State == nil {
+	//	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	//}
 	var (
-		//address = common.BytesToAddress([]byte("contract"))
-		vmenv = NewEnv(cfg)
-		//sender  = evm.AccountRef(cfg.Origin)
+		address = common.BytesToAddress([]byte("contract"))
+		vmenv   = NewEnv(cfg)
+		sender  = evm.AccountRef(cfg.Origin)
 	)
+	//if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil); rules.IsBerlin {
+	//	cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
+	//}
 	//cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
 	//cfg.State.SetCode(address, code)
+	log.Debugf("execute address:%x, code:%+v, input:%+v", address, code, input)
+
 	// Call the code with the given configuration.
-	ret, err := vmenv.Call(
+	ret, _, err := vmenv.Call(
+		sender,
+		common.BytesToAddress([]byte("contract")),
 		input,
+		cfg.GasLimit,
 		cfg.Value,
 	)
 
@@ -92,15 +118,17 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		cfg = new(Config)
 	}
 	setDefaults(cfg)
-	//
+
 	//if cfg.State == nil {
-	//	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(database.NewMemDatabase()))
+	//	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	//}
 	var (
 		vmenv  = NewEnv(cfg)
 		sender = evm.AccountRef(cfg.Origin)
 	)
-
+	//if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil); rules.IsBerlin {
+	//	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
+	//}
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
@@ -116,17 +144,25 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg)
-
+	sender := evm.AccountRef(cfg.Origin) // TODO: Call/Excuter sender not the same
 	//sender := cfg.State.GetOrNewStateObject(cfg.Origin)
+
+	//statedb := cfg.State
+
+	//if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil); rules.IsBerlin {
+	//	statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
+	//}
 	// Call the code with the given configuration.
-	ret, err := vmenv.Call(
+	ret, leftOverGas, err := vmenv.Call(
+		sender,
+		address,
 		input,
+		cfg.GasLimit,
 		cfg.Value,
 	)
-
-	return ret, err
+	return ret, leftOverGas, err
 }
